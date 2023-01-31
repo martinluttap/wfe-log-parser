@@ -1,3 +1,4 @@
+import json
 import sys
 import re
 
@@ -17,6 +18,9 @@ class RegexCapture:
         self.filename_line = re.compile(
             r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) (INFO|DEBUG) (\[job ([^\s]+)])+.*from file.*"
         )
+        self.input_line = re.compile(
+            r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) DEBUG (\[job ([^\s]+)]) (\{.*\})"
+        )
         self.filename = re.compile(r"\/[^s].*\/([^s].*).cwl")
         self.datetime = re.compile(r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\])")
         self.line = line
@@ -26,12 +30,33 @@ class RegexCapture:
 
     def is_filename_line(self) -> bool:
         return self.filename_line.match(self.line)
+    
+    def is_input_line(self) -> bool:
+        return self.input_line.match(self.line)
 
+    def is_tool_line(self) -> bool:
+        return self.tool_line.match(self.line)
+    
     def has_datetime(self) -> bool:
         return self.datetime.match(self.line)
 
+    def get_toolname(self): 
+        match = self.is_tool_line()
+        if match:
+            return match.group(10)
+        else:
+            return None
+
+    def get_input(self): 
+        match = self.is_input_line()
+        if match:
+            input_json = json.loads(match.group(10))
+            return input_json
+        else:
+            return None
+
     def get_datetime(self) -> dt:
-        match = self.tool_line.match(self.line)
+        match = self.is_tool_line()
         if match:
             new_dt = dt(
                 int(match.group(2)),
@@ -78,10 +103,14 @@ def concat_same_datetime(infile):
 if __name__ == "__main__":
     infile = open(sys.argv[1], "r")
     new_infile = concat_same_datetime(infile)
-
     # Now we have a 'new' infile where each line is a concatenation of:
     # 1.) one line starting with a datetime, and
     # 2.) subsequent lines up to a line which has a new datetime 
     # We do further processing on this new infile
+    re_cap = RegexCapture()
     for line in new_infile:
-        print(line)
+        line = line.strip()
+        re_cap.set_line(line)
+        if re_cap.is_input_line():
+            print(line)
+            print(re_cap.get_filename(), re_cap.get_toolname(), re_cap.get_input())
