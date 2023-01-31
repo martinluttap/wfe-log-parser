@@ -138,9 +138,13 @@ if __name__ == "__main__":
         line = line.strip()
         re_cap.set_line(line)
         if re_cap.is_input_line():
-            # print(line)
-            count_input += 1
-            toolname = re_cap.get_toolname()
-            filename = tool_filename_dict[toolname]
             input = re_cap.get_input()
-            print(filename, toolname, input)
+            # input_json = json.loads(input)
+            # print(input_json)
+            filename = tool_filename_dict[re_cap.get_toolname()]
+            print("========================================================================")
+            print(filename)
+            for key, val in input.items():
+                if (isinstance(val, list) or isinstance(val, dict)):
+                    print(key, json.dumps(val, sort_keys=True, indent=4))
+            print("========================================================================")
