@@ -97,15 +97,15 @@ def concat_same_datetime(infile):
         line = line.strip()
         re_cap.set_line(line)
 
-        if not aggr_line and re_cap.has_datetime():
+        if not aggr_line:
             aggr_line.append(line)
-        else: # aggr_line or not has_datetime
-            if aggr_line and re_cap.has_datetime():
+        else:
+            if re_cap.has_datetime():
                 new_line = ' '.join(aggr_line)
                 new_infile.append(new_line)
-                aggr_line = []
-            elif aggr_line and not re_cap.has_datetime():
-                aggr_line.append(line) 
+                aggr_line = [line]
+            else:
+                aggr_line.append(line)
 
     return new_infile
 
@@ -144,13 +144,3 @@ if __name__ == "__main__":
             filename = tool_filename_dict[toolname]
             input = re_cap.get_input()
             print(filename, toolname, input)
-
-    print(count_input)
-    print(len(new_infile))
-    print(len(tool_filename_dict.keys()))
-    
-    outfile = open("temp.log", 'w')
-    for line in new_infile:
-        outfile.write(line + '\n')
-
-    
