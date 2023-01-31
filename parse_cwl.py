@@ -133,14 +133,24 @@ if __name__ == "__main__":
     # 2.) subsequent lines up to a line which has a new datetime 
     # We do further processing on this new infile
     re_cap = RegexCapture()
+    count_input = 0
     for line in new_infile:
         line = line.strip()
         re_cap.set_line(line)
         if re_cap.is_input_line():
-            print(line)
-            filename = tool_filename_dict[re_cap.get_toolname()]
+            # print(line)
+            count_input += 1
             toolname = re_cap.get_toolname()
+            filename = tool_filename_dict[toolname]
             input = re_cap.get_input()
-            # print(filename, toolname, input)
-        
+            print(filename, toolname, input)
+
+    print(count_input)
+    print(len(new_infile))
+    print(len(tool_filename_dict.keys()))
+    
+    outfile = open("temp.log", 'w')
+    for line in new_infile:
+        outfile.write(line + '\n')
+
     
