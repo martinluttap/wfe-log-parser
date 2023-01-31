@@ -40,6 +40,16 @@ class RegexCapture:
     def has_datetime(self) -> bool:
         return self.datetime.match(self.line)
 
+    def get_tool_to_filename(self): 
+        match = self.is_filename_line()
+        if match:
+            toolname = match.group(10)
+            filename = self.get_filename()
+
+            return toolname, filename
+        else:
+            return None
+
     def get_toolname(self): 
         match = self.is_tool_line()
         if match:
@@ -99,9 +109,24 @@ def concat_same_datetime(infile):
 
     return new_infile
 
+def get_tool_filename_dict(infile):
+    re_cap = RegexCapture()
+    tool_filename_dict = {}
+    for line in infile.readlines():
+        line = line.strip()
+        re_cap.set_line(line)
+        tuple = re_cap.get_tool_to_filename()
+        if tuple:
+            tool = tuple[0]
+            filename = tuple[1]
+            tool_filename_dict[tool] = filename
+
+    return tool_filename_dict
 
 if __name__ == "__main__":
     infile = open(sys.argv[1], "r")
+    tool_filename_dict = get_tool_filename_dict(infile)
+    infile.seek(0) # Reset for next function
     new_infile = concat_same_datetime(infile)
     # Now we have a 'new' infile where each line is a concatenation of:
     # 1.) one line starting with a datetime, and
@@ -113,4 +138,9 @@ if __name__ == "__main__":
         re_cap.set_line(line)
         if re_cap.is_input_line():
             print(line)
-            print(re_cap.get_filename(), re_cap.get_toolname(), re_cap.get_input())
+            filename = tool_filename_dict[re_cap.get_toolname()]
+            toolname = re_cap.get_toolname()
+            input = re_cap.get_input()
+            # print(filename, toolname, input)
+        
+    
