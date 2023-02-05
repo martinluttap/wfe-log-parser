@@ -145,6 +145,6 @@ if __name__ == "__main__":
             print("========================================================================")
             print(filename)
             for key, val in input.items():
-                if (isinstance(val, list) or isinstance(val, dict)):
-                    print(key, json.dumps(val, sort_keys=True, indent=4))
+                # if (isinstance(val, list) or isinstance(val, dict)):
+                print(key, json.dumps(val, sort_keys=True, indent=4))
             print("========================================================================")
