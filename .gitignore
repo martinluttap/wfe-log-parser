@@ -1,4 +1,6 @@
+*.sh
 *.txt
 *.log
 *.yaml
 intermediate_input/
+out
