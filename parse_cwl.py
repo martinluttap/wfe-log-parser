@@ -198,7 +198,7 @@ if __name__ == "__main__":
                 if type(inp_val) is dict:
                     if "class" in inp_val:
                         assert inp_val["class"] == "File"
-                        yaml_val = "\n    class: {}\n    path: {}".format(
+                        yaml_val = "\n    class: {}\n    path: /{}".format(
                             "File", inp_val["location"].lstrip("file://")
                         )
                     separator = ""
@@ -208,7 +208,7 @@ if __name__ == "__main__":
                     elem = inp_val[0]
                     if "class" in elem:
                         assert elem["class"] == "File"
-                        yaml_val = "\n    class: {}\n    path: {}".format(
+                        yaml_val = "\n    class: {}\n    path: /{}".format(
                             "File", elem["location"].lstrip("file://")
                         )
                     separator = ""
@@ -226,4 +226,4 @@ if __name__ == "__main__":
                         yaml_val = '"{}"'.format(inp_val)
                     separator = " "
                 out_yaml.write("{}:{}{}\n".format(inp_name, separator, yaml_val))
-                out_yaml.close()
+            out_yaml.close()
