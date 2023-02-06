@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import re
 
@@ -174,7 +175,9 @@ if __name__ == "__main__":
     if args.generate_yaml:
         step_names = args.generate_yaml
         for step in step_names:
-            out_yaml = open("{}.yaml".format(step), "w")
+            out_yaml = open("{}/{}.yaml".format(
+                    os.path.dirname(os.path.abspath(__file__)), step), 
+                "w")
             inputs = file_inputs[step]
 
             # Now we extract the inputs of each file. For a YAML input, we might
