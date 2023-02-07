@@ -208,13 +208,16 @@ if __name__ == "__main__":
                 # Case of value is list of nested. We treat it the same as
                 # one nested value for now.
                 elif type(inp_val) is list:
-                    elem = inp_val[0]
-                    if "class" in elem:
-                        assert elem["class"] == "File"
-                        yaml_val = "\n    class: {}\n    path: /{}".format(
-                            "File", elem["location"].lstrip("file://")
-                        )
-                    separator = ""
+                    elem_arr = []
+                    for elem in inp_val:
+                        if "class" in elem:
+                            assert elem["class"] == "File"
+                            elem_val = "\n  - class: {}\n    path: /{}".format(
+                                "File", elem["location"].lstrip("file://")
+                            )
+                        separator = ""
+                        elem_arr.append(elem_val)
+                    yaml_val = "".join(elem_arr)
                 else:
                     # There are four cases for the type of inp_val here,
                     # namely None, string, int, and bool. We deal accordingly.
