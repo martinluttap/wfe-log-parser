@@ -199,11 +199,17 @@ if __name__ == "__main__":
                 yaml_val = None
                 # Case of value is nested
                 if type(inp_val) is dict:
+                    print(json.dumps(inp_val, indent=4))
                     if "class" in inp_val:
-                        assert inp_val["class"] == "File"
-                        yaml_val = "\n    class: {}\n    path: /{}".format(
-                            "File", inp_val["location"].lstrip("file://")
-                        )
+                        if inp_val['class'] == "File":
+                            yaml_val = "\n    class: {}\n    path: /{}".format(
+                                "File", inp_val["location"].lstrip("file://")
+                            )
+                        else:
+                            assert(inp_val['class'] == "Directory")
+                            yaml_val = "\n    class: {}\n    path: /{}".format(
+                                "Directory", inp_val["location"].lstrip("file://")
+                            )
                     separator = ""
                 # Case of value is list of nested. We treat it the same as
                 # one nested value for now.
