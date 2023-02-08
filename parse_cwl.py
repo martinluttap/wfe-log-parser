@@ -199,7 +199,6 @@ if __name__ == "__main__":
                 yaml_val = None
                 # Case of value is nested
                 if type(inp_val) is dict:
-                    print(json.dumps(inp_val, indent=4))
                     if "class" in inp_val:
                         if inp_val['class'] == "File":
                             yaml_val = "\n    class: {}\n    path: /{}".format(
@@ -211,8 +210,7 @@ if __name__ == "__main__":
                                 "Directory", inp_val["location"].lstrip("file://")
                             )
                     separator = ""
-                # Case of value is list of nested. We treat it the same as
-                # one nested value for now.
+                # Case of value is list of nested. 
                 elif type(inp_val) is list:
                     elem_arr = []
                     for elem in inp_val:
@@ -221,15 +219,23 @@ if __name__ == "__main__":
                             elem_val = "\n  - class: {}\n    path: /{}".format(
                                 "File", elem["location"].lstrip("file://")
                             )
-                        separator = ""
+                            elem_arr.append(elem_val)
+                        # So far we have only seen a list of string for this case. 
+                        else:
+                            elem_val = "\n  - {}".format(
+                                elem
+                            ) 
                         elem_arr.append(elem_val)
+                    separator = ""
                     yaml_val = "".join(elem_arr)
                 else:
-                    # There are four cases for the type of inp_val here,
-                    # namely None, string, int, and bool. We deal accordingly.
+                    # There are five cases for the type of inp_val here,
+                    # namely None, string, int, float, and bool. We deal accordingly.
                     if inp_val is None:
                         yaml_val = "null"
                     elif type(inp_val) is int:
+                        yaml_val = inp_val
+                    elif type(inp_val) is float:
                         yaml_val = inp_val
                     elif type(inp_val) is bool:
                         yaml_val = str(inp_val).lower()
