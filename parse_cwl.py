@@ -219,7 +219,6 @@ if __name__ == "__main__":
                             elem_val = "\n  - class: {}\n    path: /{}".format(
                                 "File", elem["location"].lstrip("file://")
                             )
-                            elem_arr.append(elem_val)
                         # So far we have only seen a list of string for this case. 
                         else:
                             elem_val = "\n  - {}".format(
