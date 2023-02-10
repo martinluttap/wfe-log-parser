@@ -128,6 +128,48 @@ def get_tool_filename_dict(infile):
 
     return tool_filename_dict
 
+def handle_yaml_unary_type(inp_val):
+    yaml_val = None
+    # There are five cases for the type of inp_val here,
+    # namely None, string, int, float, and bool. We deal accordingly.
+    if inp_val is None:
+        yaml_val = "null"
+    elif type(inp_val) is int:
+        yaml_val = inp_val
+    elif type(inp_val) is float:
+        yaml_val = inp_val
+    elif type(inp_val) is bool:
+        yaml_val = str(inp_val).lower()
+    else:
+        assert type(inp_val) is str
+        yaml_val = '"{}"'.format(inp_val)
+
+    return yaml_val
+
+def handle_yaml_dict_type(inp_key, inp_val, pad_num: int = 4):
+    assert(type(inp_val) is dict)
+    ret_string = ""
+    padding = ' ' * pad_num
+    if "class" in inp_val:
+        if inp_val['class'] == "File":
+            elem_val = "\n{}class: {}\n{}path: /{}".format(
+                padding, "File", padding, inp_val["location"].lstrip("file://")
+            )
+        else:
+            assert(inp_val['class'] == "Directory")
+            elem_val = "\n{}class: {}\n{}path: /{}".format(
+                padding, "Directory", padding, inp_val["location"].lstrip("file://")
+            )
+        ret_string += "{}".format(elem_val)
+    else:
+        for k, v in inp_val.items():
+            if type(v) is dict:
+                handled_k_v = handle_yaml_dict_type(k, v, pad_num + 4)
+                ret_string += "\n{}{}:{}".format(padding, k, handled_k_v)
+            else:
+                ret_string += "\n{}{}: {}".format(padding, k, handle_yaml_unary_type(v))
+    
+    return ret_string
 
 parser = ArgumentParser(
     description="A versatile WFE log parser. Currently support: CWL"
@@ -197,6 +239,7 @@ if __name__ == "__main__":
             separator = None
             for inp_name, inp_val in inputs.items():
                 yaml_val = None
+                unary_types = {str, int, bool, float}
                 # Case of value is nested
                 if type(inp_val) is dict:
                     if "class" in inp_val:
@@ -219,28 +262,25 @@ if __name__ == "__main__":
                             elem_val = "\n  - class: {}\n    path: /{}".format(
                                 "File", elem["location"].lstrip("file://")
                             )
-                        # So far we have only seen a list of string for this case. 
                         else:
+                            # So far we have seen either a list of unary types
+                            # (str, int, float) or dict elements. If it is the
+                            # former, we can just use the list element as is. 
+                            # Else we should process the element further.
+                            processed_elem = None
+                            if type(elem) in unary_types:
+                                processed_elem = elem
+                            else:
+                                processed_elem = handle_yaml_dict_type(inp_name, elem)
                             elem_val = "\n  - {}".format(
-                                elem
+                                processed_elem.lstrip() # This is too hacky. Need to fix
                             ) 
                         elem_arr.append(elem_val)
                     separator = ""
                     yaml_val = "".join(elem_arr)
                 else:
-                    # There are five cases for the type of inp_val here,
-                    # namely None, string, int, float, and bool. We deal accordingly.
-                    if inp_val is None:
-                        yaml_val = "null"
-                    elif type(inp_val) is int:
-                        yaml_val = inp_val
-                    elif type(inp_val) is float:
-                        yaml_val = inp_val
-                    elif type(inp_val) is bool:
-                        yaml_val = str(inp_val).lower()
-                    else:
-                        assert type(inp_val) is str
-                        yaml_val = '"{}"'.format(inp_val)
+                    assert(inp_val is None or type(inp_val) in unary_types)
+                    yaml_val = handle_yaml_unary_type(inp_val)
                     separator = " "
                 out_yaml.write("{}:{}{}\n".format(inp_name, separator, yaml_val))
             out_yaml.close()
