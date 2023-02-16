@@ -236,6 +236,7 @@ if __name__ == "__main__":
             # For this case we process each element like we process one nested
             # value, appending '-' for each element. But we will do this once
             # there is a workflow input which require such feature.
+            print(json.dumps(inputs, indent=4))
             separator = None
             for inp_name, inp_val in inputs.items():
                 yaml_val = None
@@ -252,6 +253,8 @@ if __name__ == "__main__":
                             yaml_val = "\n    class: {}\n    path: /{}".format(
                                 "Directory", inp_val["location"].lstrip("file://")
                             )
+                    else:
+                        yaml_val = handle_yaml_dict_type(inp_name, inp_val)
                     separator = ""
                 # Case of value is list of nested. 
                 elif type(inp_val) is list:
