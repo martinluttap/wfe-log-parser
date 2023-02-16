@@ -188,6 +188,7 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     infile = open(sys.argv[1], "r")
+    print("Parsing log from {} ...".format(sys.argv[1]))
     tool_filename_dict = get_tool_filename_dict(infile)
     infile.seek(0)  # Reset for next function
     new_infile = concat_same_datetime(infile)
