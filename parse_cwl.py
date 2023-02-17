@@ -7,6 +7,36 @@ from argparse import ArgumentParser
 from datetime import datetime as dt
 
 
+parser = ArgumentParser(
+    description="A versatile WFE log parser. Currently support: CWL"
+)
+parser.add_argument("cwl_log", help="Source CWL log file")
+parser.add_argument(
+    "--generate_yaml",
+    nargs="+",
+    help="""\ Generate YAML input for a given <step_name>. The step name must
+exist within the log. \nUsage: --generate_yaml <step_name>, \ne.g.:
+--generate_yaml fastqc",
+""",
+)
+parser.add_argument(
+    "--print_exec_steps",
+    default=False,
+    action="store_true",
+    help="""\ Print a list of executed steps. \nUsage: --print_exec_steps",
+""",
+)
+parser.add_argument(
+    "--print_input_map",
+    default=False,
+    action="store_true",
+    help="""\ Print a JSON of input as seen in the given log. 
+    \nUsage: --print_input_map",
+""",
+)
+parser.set_defaults(unit_test=False)
+args = parser.parse_args()
+
 class RegexCapture:
     """
     Capture useful bits of information in a given CWL log.
@@ -171,24 +201,8 @@ def handle_yaml_dict_type(inp_key, inp_val, pad_num: int = 4):
     
     return ret_string
 
-parser = ArgumentParser(
-    description="A versatile WFE log parser. Currently support: CWL"
-)
-parser.add_argument("cwl_log", help="Source CWL log file")
-parser.add_argument(
-    "--generate_yaml",
-    nargs="+",
-    help="""\ Generate YAML input for a given <step_name>. The step name must
-exist within the log. \nUsage: --generate_yaml <step_name>, \ne.g.:
---generate_yaml fastqc",
-""",
-)
-parser.set_defaults(unit_test=False)
-args = parser.parse_args()
-
 if __name__ == "__main__":
     infile = open(sys.argv[1], "r")
-    print("Parsing log from {} ...".format(sys.argv[1]))
     tool_filename_dict = get_tool_filename_dict(infile)
     infile.seek(0)  # Reset for next function
     new_infile = concat_same_datetime(infile)
@@ -215,6 +229,11 @@ if __name__ == "__main__":
             file_inputs[filename] = input
 
     #  Here we add further processing based on given arguments.
+    if args.print_input_map:
+        print(json.dumps(file_inputs, indent=4))
+    if args.print_exec_steps:
+        for k, v in file_inputs.items():
+            print(k)
     if args.generate_yaml:
         step_names = args.generate_yaml
         for step in step_names:
