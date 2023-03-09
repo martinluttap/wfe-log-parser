@@ -122,125 +122,129 @@ class RegexCapture:
 
         return None
 
+class LogParser:
+    def __init__(self, log_path: str) -> None:
 
-def concat_same_datetime(infile):
-    re_cap = RegexCapture()
-    new_infile = []
-    aggr_line = []  # Aggregated line based on one datetime
-    for line in infile.readlines():
-        line = line.strip()
-        re_cap.set_line(line)
+        self.file_inputs = {}
 
-        if not aggr_line:
-            aggr_line.append(line)
-        else:
-            if re_cap.has_datetime():
-                new_line = " ".join(aggr_line)
-                new_infile.append(new_line)
-                aggr_line = [line]
-            else:
+        infile = open(log_path, "r")
+        tool_filename_dict = self.get_tool_filename_dict(infile)
+        infile.seek(0)  # Reset for next function
+        new_infile = self.concat_same_datetime(infile)
+
+        # Now we have a 'new' infile where each line is a concatenation of: 1.) one
+        # line starting with a datetime, and 2.) subsequent lines up to a line which
+        # has a new datetime We do further processing on this new infile
+        re_cap = RegexCapture()
+        count_input = 0
+        for line in new_infile:
+            line = line.strip()
+            re_cap.set_line(line)
+            # We process as follow. For now we are only interested in processing an
+            # input line. If it is, we separate the list of inputs based on their
+            # filename. We create a dictionary where the filename is key, and their
+            # dict of inputs is val.
+            if re_cap.is_input_line():
+                # First extract the dict of inputs
+                input = re_cap.get_input()
+                # Then get the filename using the dict we constructed beforehand.
+                filename = tool_filename_dict[re_cap.get_toolname()]
+
+                self.file_inputs[filename] = input
+
+
+    def concat_same_datetime(self, infile):
+        re_cap = RegexCapture()
+        new_infile = []
+        aggr_line = []  # Aggregated line based on one datetime
+        for line in infile.readlines():
+            line = line.strip()
+            re_cap.set_line(line)
+
+            if not aggr_line:
                 aggr_line.append(line)
-
-    return new_infile
-
-
-def get_tool_filename_dict(infile):
-    re_cap = RegexCapture()
-    tool_filename_dict = {}
-    for line in infile.readlines():
-        line = line.strip()
-        re_cap.set_line(line)
-        tuple = re_cap.get_tool_to_filename()
-        if tuple:
-            tool = tuple[0]
-            filename = tuple[1]
-            tool_filename_dict[tool] = filename
-
-    return tool_filename_dict
-
-def handle_yaml_unary_type(inp_val):
-    yaml_val = None
-    # There are five cases for the type of inp_val here,
-    # namely None, string, int, float, and bool. We deal accordingly.
-    if inp_val is None:
-        yaml_val = "null"
-    elif type(inp_val) is int:
-        yaml_val = inp_val
-    elif type(inp_val) is float:
-        yaml_val = inp_val
-    elif type(inp_val) is bool:
-        yaml_val = str(inp_val).lower()
-    else:
-        assert type(inp_val) is str
-        yaml_val = '"{}"'.format(inp_val)
-
-    return yaml_val
-
-def handle_yaml_dict_type(inp_key, inp_val, pad_num: int = 4):
-    assert(type(inp_val) is dict)
-    ret_string = ""
-    padding = ' ' * pad_num
-    if "class" in inp_val:
-        if inp_val['class'] == "File":
-            elem_val = "\n{}class: {}\n{}path: /{}".format(
-                padding, "File", padding, inp_val["location"].lstrip("file://")
-            )
-        else:
-            assert(inp_val['class'] == "Directory")
-            elem_val = "\n{}class: {}\n{}path: /{}".format(
-                padding, "Directory", padding, inp_val["location"].lstrip("file://")
-            )
-        ret_string += "{}".format(elem_val)
-    else:
-        for k, v in inp_val.items():
-            if type(v) is dict:
-                handled_k_v = handle_yaml_dict_type(k, v, pad_num + 4)
-                ret_string += "\n{}{}:{}".format(padding, k, handled_k_v)
             else:
-                ret_string += "\n{}{}: {}".format(padding, k, handle_yaml_unary_type(v))
-    
-    return ret_string
+                if re_cap.has_datetime():
+                    new_line = " ".join(aggr_line)
+                    new_infile.append(new_line)
+                    aggr_line = [line]
+                else:
+                    aggr_line.append(line)
 
-if __name__ == "__main__":
-    infile = open(sys.argv[1], "r")
-    tool_filename_dict = get_tool_filename_dict(infile)
-    infile.seek(0)  # Reset for next function
-    new_infile = concat_same_datetime(infile)
+        return new_infile
 
-    # Now we have a 'new' infile where each line is a concatenation of: 1.) one
-    # line starting with a datetime, and 2.) subsequent lines up to a line which
-    # has a new datetime We do further processing on this new infile
-    re_cap = RegexCapture()
-    count_input = 0
-    file_inputs = {}
-    for line in new_infile:
-        line = line.strip()
-        re_cap.set_line(line)
-        # We process as follow. For now we are only interested in processing an
-        # input line. If it is, we separate the list of inputs based on their
-        # filename. We create a dictionary where the filename is key, and their
-        # dict of inputs is val.
-        if re_cap.is_input_line():
-            # First extract the dict of inputs
-            input = re_cap.get_input()
-            # Then get the filename using the dict we constructed beforehand.
-            filename = tool_filename_dict[re_cap.get_toolname()]
 
-            file_inputs[filename] = input
+    def get_tool_filename_dict(self, infile):
+        re_cap = RegexCapture()
+        tool_filename_dict = {}
+        for line in infile.readlines():
+            line = line.strip()
+            re_cap.set_line(line)
+            tuple = re_cap.get_tool_to_filename()
+            if tuple:
+                tool = tuple[0]
+                filename = tuple[1]
+                tool_filename_dict[tool] = filename
 
-    #  Here we add further processing based on given arguments.
-    if args.print_input_map:
-        print(json.dumps(file_inputs, indent=4))
-    if args.print_exec_steps:
-        for k, v in file_inputs.items():
+        return tool_filename_dict
+
+    def handle_yaml_unary_type(self, inp_val):
+        yaml_val = None
+        # There are five cases for the type of inp_val here,
+        # namely None, string, int, float, and bool. We deal accordingly.
+        if inp_val is None:
+            yaml_val = "null"
+        elif type(inp_val) is int:
+            yaml_val = inp_val
+        elif type(inp_val) is float:
+            yaml_val = inp_val
+        elif type(inp_val) is bool:
+            yaml_val = str(inp_val).lower()
+        else:
+            assert type(inp_val) is str
+            yaml_val = '"{}"'.format(inp_val)
+
+        return yaml_val
+
+    def handle_yaml_dict_type(self, inp_key, inp_val, pad_num: int = 4):
+        assert(type(inp_val) is dict)
+        ret_string = ""
+        padding = ' ' * pad_num
+        if "class" in inp_val:
+            if inp_val['class'] == "File":
+                elem_val = "\n{}class: {}\n{}path: /{}".format(
+                    padding, "File", padding, inp_val["location"].lstrip("file://")
+                )
+            else:
+                assert(inp_val['class'] == "Directory")
+                elem_val = "\n{}class: {}\n{}path: /{}".format(
+                    padding, "Directory", padding, inp_val["location"].lstrip("file://")
+                )
+            ret_string += "{}".format(elem_val)
+        else:
+            for k, v in inp_val.items():
+                if type(v) is dict:
+                    handled_k_v = self.handle_yaml_dict_type(k, v, pad_num + 4)
+                    ret_string += "\n{}{}:{}".format(padding, k, handled_k_v)
+                else:
+                    ret_string += "\n{}{}: {}".format(padding, k, self.handle_yaml_unary_type(v))
+
+        return ret_string
+
+    def print_input_map(self):
+        print(json.dumps(self.file_inputs, indent=4))
+
+    def print_exec_steps(self):
+        for k, v in self.file_inputs.items():
             print(k)
-    if args.generate_yaml:
+
+    def generate_yaml(self, args):
         step_names = args.generate_yaml
         for step in step_names:
             out_yaml = open("{}/{}.yaml".format(
                     os.path.dirname(os.path.abspath(__file__)), step), 
                 "w")
-            inputs = file_inputs[step]
+            inputs = log_parser.file_inputs[step]
 
             # Now we extract the inputs of each file. For a YAML input, we might
             # give a separator if the value is not nested, e.g. key1:  val1
@@ -274,7 +278,7 @@ if __name__ == "__main__":
                                 "Directory", inp_val["location"].lstrip("file://")
                             )
                     else:
-                        yaml_val = handle_yaml_dict_type(inp_name, inp_val)
+                        yaml_val = log_parser.handle_yaml_dict_type(inp_name, inp_val)
                     separator = ""
                 # Case of value is list of nested. 
                 elif type(inp_val) is list:
@@ -294,7 +298,7 @@ if __name__ == "__main__":
                             if type(elem) in unary_types:
                                 processed_elem = elem
                             else:
-                                processed_elem = handle_yaml_dict_type(inp_name, elem)
+                                processed_elem = log_parser.handle_yaml_dict_type(inp_name, elem)
                             elem_val = "\n  - {}".format(
                                 processed_elem.lstrip() # This is too hacky. Need to fix
                             ) 
@@ -303,7 +307,20 @@ if __name__ == "__main__":
                     yaml_val = "".join(elem_arr)
                 else:
                     assert(inp_val is None or type(inp_val) in unary_types)
-                    yaml_val = handle_yaml_unary_type(inp_val)
+                    yaml_val = log_parser.handle_yaml_unary_type(inp_val)
                     separator = " "
                 out_yaml.write("{}:{}{}\n".format(inp_name, separator, yaml_val))
             out_yaml.close()
+
+if __name__ == "__main__":
+
+    log_path = sys.argv[1]
+    log_parser = LogParser(log_path)
+
+    #  Here we add further processing based on given arguments.
+    if args.print_input_map:
+        log_parser.print_input_map()
+    if args.print_exec_steps:
+        log_parser.print_exec_steps()
+    if args.generate_yaml:
+        log_parser.generate_yaml(args)
