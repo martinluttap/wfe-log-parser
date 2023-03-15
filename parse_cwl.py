@@ -20,10 +20,17 @@ exist within the log. \nUsage: --generate_yaml <step_name>, \ne.g.:
 """,
 )
 parser.add_argument(
-    "--print_exec_steps",
+    "--print_exec_tree",
     default=False,
     action="store_true",
-    help="""\ Print a list of executed steps. \nUsage: --print_exec_steps",
+    help="""\ Print a list of executed steps. \nUsage: --print_exec_tree",
+""",
+)
+parser.add_argument(
+    "--print_step_filename",
+    default=False,
+    action="store_true",
+    help="""\ Print a list of step and its executed CWL file name. \nUsage: --print_step_filename",
 """,
 )
 parser.add_argument(
@@ -57,6 +64,13 @@ class RegexCapture:
         self.datetime = re.compile(
             r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\])"
         )
+        self.info_line = re.compile(
+            r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) (INFO) (\[([^\s]+) ([^\s]*)]) (start|starting|completed)+.*"
+        )
+        self.debug_line = re.compile(
+            r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) (DEBUG) (\[([^\s]+) ([^\s]*)]) (initializing|initialized) from file\:\/\/([^\s]+)+.*"
+        )
+
         self.line = line
 
     def set_line(self, new_line):
@@ -70,6 +84,12 @@ class RegexCapture:
 
     def is_tool_line(self) -> bool:
         return self.tool_line.match(self.line)
+
+    def is_info_line(self) -> bool:
+        return self.info_line.match(self.line)
+
+    def is_debug_line(self) -> bool:
+        return self.debug_line.match(self.line)
 
     def has_datetime(self) -> bool:
         return self.datetime.match(self.line)
@@ -96,6 +116,20 @@ class RegexCapture:
         if match:
             input_json = json.loads(match.group(10))
             return input_json
+        else:
+            return None
+        
+    def get_exec_info(self):
+        match = self.is_info_line()
+        if match:
+            return match.groups()
+        else:
+            return None
+        
+    def get_file_info(self):
+        match = self.is_debug_line()
+        if match:
+            return match.groups()[-3], ''.join(match.groups()[-1].split('#')[:-1])
         else:
             return None
 
@@ -126,6 +160,8 @@ class LogParser:
     def __init__(self, log_path: str) -> None:
 
         self.file_inputs = {}
+        self.exec_tree = []
+        self.step_cwl_file = {}
 
         infile = open(log_path, "r")
         tool_filename_dict = self.get_tool_filename_dict(infile)
@@ -136,7 +172,6 @@ class LogParser:
         # line starting with a datetime, and 2.) subsequent lines up to a line which
         # has a new datetime We do further processing on this new infile
         re_cap = RegexCapture()
-        count_input = 0
         for line in new_infile:
             line = line.strip()
             re_cap.set_line(line)
@@ -151,7 +186,16 @@ class LogParser:
                 filename = tool_filename_dict[re_cap.get_toolname()]
 
                 self.file_inputs[filename] = input
+            
+            # Here we also capture the INFO lines and extract information 
+            # regarding execution tree.   
+            if re_cap.is_info_line():
+                self.exec_tree.append(re_cap.get_exec_info())
 
+            # Capture the DEBUG lines to get information about source file 
+            if re_cap.is_debug_line():
+                step, cwl_file = re_cap.get_file_info() 
+                self.step_cwl_file[step] = cwl_file
 
     def concat_same_datetime(self, infile):
         re_cap = RegexCapture()
@@ -234,9 +278,13 @@ class LogParser:
     def print_input_map(self):
         print(json.dumps(self.file_inputs, indent=4))
 
-    def print_exec_steps(self):
-        for k, v in self.file_inputs.items():
-            print(k)
+    def print_exec_tree(self):
+        for line in self.exec_tree:
+            print(line)
+
+    def print_step_filename(self):
+        for step, cwl_file in self.step_cwl_file.items():
+            print("{: <32} {}".format(step, cwl_file))
 
     def generate_yaml(self, args):
         step_names = args.generate_yaml
@@ -320,7 +368,9 @@ if __name__ == "__main__":
     #  Here we add further processing based on given arguments.
     if args.print_input_map:
         log_parser.print_input_map()
-    if args.print_exec_steps:
-        log_parser.print_exec_steps()
+    if args.print_exec_tree:
+        log_parser.print_exec_tree()
+    if args.print_step_filename:
+        log_parser.print_step_filename()
     if args.generate_yaml:
         log_parser.generate_yaml(args)
