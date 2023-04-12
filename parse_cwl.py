@@ -41,6 +41,14 @@ parser.add_argument(
     \nUsage: --print_input_map",
 """,
 )
+parser.add_argument(
+    "--print_output_map",
+    default=False,
+    action="store_true",
+    help="""\ Print a JSON of output as seen in the given log. 
+    \nUsage: --print_output_map",
+""",
+)
 parser.set_defaults(unit_test=False)
 args = parser.parse_args()
 
@@ -57,8 +65,14 @@ class RegexCapture:
         self.filename_line = re.compile(
             r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) (INFO|DEBUG) (\[job ([^\s]+)])+.*from file.*"
         )
-        self.input_line = re.compile(
+        self.step_input_line = re.compile(
             r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) DEBUG (\[job ([^\s]+)]) (\{.*\})"
+        )
+        self.wf_input_line = re.compile(
+            r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) DEBUG (\[workflow ([^\s]+)]) inputs (\{.*\})"
+        )
+        self.step_output_line = re.compile(
+            r"(\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\]) DEBUG (\[.* ([^\s]+)]) outputs (\{.*\})"
         )
         self.filename = re.compile(r"\/[^s].*\/([^s].*).cwl")
         self.datetime = re.compile(
@@ -79,8 +93,14 @@ class RegexCapture:
     def is_filename_line(self) -> bool:
         return self.filename_line.match(self.line)
 
-    def is_input_line(self) -> bool:
-        return self.input_line.match(self.line)
+    def is_step_input_line(self) -> bool:
+        return self.step_input_line.match(self.line)
+
+    def is_step_output_line(self) -> bool:
+        return self.step_output_line.match(self.line)
+
+    def is_wf_input_line(self) -> bool:
+        return self.wf_input_line.match(self.line)
 
     def is_tool_line(self) -> bool:
         return self.tool_line.match(self.line)
@@ -111,14 +131,38 @@ class RegexCapture:
         else:
             return None
 
-    def get_input(self):
-        match = self.is_input_line()
+    def get_workflowname(self):
+        match = self.is_wf_input_line()
+        if match:
+            return match.groups()[8]
+        else:
+            return None
+
+    def get_step_input(self):
+        match = self.is_step_input_line()
         if match:
             input_json = json.loads(match.group(10))
             return input_json
         else:
             return None
         
+    def get_wf_input(self):
+        match = self.is_wf_input_line()
+        if match:
+            input_json = json.loads(match.group(10))
+            return input_json
+        else:
+            return None
+        
+    def get_step_output(self):
+        match = self.is_step_output_line()
+        if match:
+            name, output_json = match.group(9), json.loads(match.group(10))
+            return name, output_json
+        else:
+            return None
+
+
     def get_exec_info(self):
         match = self.is_info_line()
         if match:
@@ -159,9 +203,11 @@ class RegexCapture:
 class LogParser:
     def __init__(self, log_path: str) -> None:
 
-        self.file_inputs = {}
+        self.step_inputs = {}
+        self.wf_inputs = {}
+        self.wf_outputs = {}
         self.exec_tree = []
-        self.step_cwl_file = {}
+        self.wf_cwl_file = {}
 
         infile = open(log_path, "r")
         tool_filename_dict = self.get_tool_filename_dict(infile)
@@ -175,18 +221,23 @@ class LogParser:
         for line in new_infile:
             line = line.strip()
             re_cap.set_line(line)
-            # We process as follow. For now we are only interested in processing an
-            # input line. If it is, we separate the list of inputs based on their
-            # filename. We create a dictionary where the filename is key, and their
-            # dict of inputs is val.
-            if re_cap.is_input_line():
+            # Capture the inputs for step
+            if re_cap.is_step_input_line():
                 # First extract the dict of inputs
-                input = re_cap.get_input()
+                input = re_cap.get_step_input()
                 # Then get the filename using the dict we constructed beforehand.
                 filename = tool_filename_dict[re_cap.get_toolname()]
 
-                self.file_inputs[filename] = input
-            
+                self.step_inputs[filename] = input
+                # print(line)
+
+            # Capture the inputs for workflow.
+            # Similar logic with input extraction for step
+            if re_cap.is_wf_input_line():
+                input = re_cap.get_wf_input()
+                filename = re_cap.get_workflowname()
+                self.wf_inputs[filename] = input
+
             # Here we also capture the INFO lines and extract information 
             # regarding execution tree.   
             if re_cap.is_info_line():
@@ -195,7 +246,11 @@ class LogParser:
             # Capture the DEBUG lines to get information about source file 
             if re_cap.is_debug_line():
                 step, cwl_file = re_cap.get_file_info() 
-                self.step_cwl_file[step] = cwl_file
+                self.wf_cwl_file[step] = cwl_file
+
+            if re_cap.is_step_output_line():
+                name, output = re_cap.get_step_output()
+                self.wf_outputs[str.upper(name)] = output
 
     def concat_same_datetime(self, infile):
         re_cap = RegexCapture()
@@ -276,23 +331,43 @@ class LogParser:
         return ret_string
 
     def print_input_map(self):
-        print(json.dumps(self.file_inputs, indent=4))
+        print(json.dumps(self.step_inputs, indent=4))
+
+    def print_output_map(self):
+        print(json.dumps(self.wf_outputs, indent=4))
 
     def print_exec_tree(self):
-        for line in self.exec_tree:
-            print(line)
+        exec_stack = []
+        for exec_group in self.exec_tree:
+            step_type = exec_group[9]
+            step_name = exec_group[10]
+            state = exec_group[11]
+            if step_name == '':
+                step_name = 'main'
+            if (state == 'start'and (step_name not in exec_stack)):
+                exec_stack.append(step_name) 
+                tabs = "\t" * (len(exec_stack) - 1)
+                # print("{: <32} {}".format(step, cwl_file))
+                print("{}{: <32} {}".format(
+                    tabs,
+                    step_name, self.wf_cwl_file[step_name] if step_name in self.wf_cwl_file else ''))
+                assert(exec_stack[0] == 'main')
+            if (state == 'completed' or state == 'finished'):
+                if (exec_stack[-1] == step_name):
+                    exec_stack.pop()
 
     def print_step_filename(self):
-        for step, cwl_file in self.step_cwl_file.items():
+        for step, cwl_file in self.wf_cwl_file.items():
             print("{: <32} {}".format(step, cwl_file))
 
     def generate_yaml(self, args):
         step_names = args.generate_yaml
+        print(log_parser.step_inputs)
         for step in step_names:
             out_yaml = open("{}/{}.yaml".format(
                     os.path.dirname(os.path.abspath(__file__)), step), 
                 "w")
-            inputs = log_parser.file_inputs[step]
+            inputs = log_parser.step_inputs[step]
 
             # Now we extract the inputs of each file. For a YAML input, we might
             # give a separator if the value is not nested, e.g. key1:  val1
@@ -368,9 +443,12 @@ if __name__ == "__main__":
     #  Here we add further processing based on given arguments.
     if args.print_input_map:
         log_parser.print_input_map()
+    if args.print_output_map:
+        log_parser.print_output_map()
     if args.print_exec_tree:
         log_parser.print_exec_tree()
     if args.print_step_filename:
         log_parser.print_step_filename()
     if args.generate_yaml:
         log_parser.generate_yaml(args)
+        print(json.dumps(log_parser.step_inputs, indent=4))
